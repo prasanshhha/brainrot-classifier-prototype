@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { width: 240px; margin: 0; padding: 14px; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    h1 { font-size: 15px; margin: 0 0 10px; }
+    label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .stats { margin: 12px 0; padding: 10px; border-radius: 8px; background: #f3f3f3; }
+    .big { font-size: 22px; font-weight: 700; color: #d93025; }
+    .muted { color: #666; font-size: 12px; }
+    button { margin-top: 4px; padding: 5px 10px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>BrainRot Counter</h1>
+  <label><input type="checkbox" id="enabled"> Show counter on Instagram and TikTok</label>
+  <div class="stats">
+    <div><span class="big" id="rot">0</span> brain rot</div>
+    <div><span id="reels">0</span> reels today · <span id="pct">0%</span></div>
+  </div>
+  <div class="muted" id="mode"></div>
+  <button id="reset">Reset today</button>
+  <script src="config.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

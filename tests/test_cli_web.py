@@ -1,3 +1,4 @@
+import base64
 import json
 
 from fastapi.testclient import TestClient
@@ -51,3 +52,50 @@ def test_web_requires_input(monkeypatch):
     _patch(monkeypatch)
     r = TestClient(server.app).post("/api/classify", data={"mode": "native"})
     assert r.status_code == 400
+
+
+def _jpeg_b64() -> str:
+    import cv2
+    import numpy as np
+
+    ok, buf = cv2.imencode(".jpg", np.zeros((64, 36, 3), dtype=np.uint8))
+    return base64.b64encode(buf.tobytes()).decode()
+
+
+def test_predict_scores_frames_and_caches(monkeypatch):
+    calls = []
+    orig = clf_mod.BrainRotClassifier.__init__
+
+    def init(self, settings=None, backend=None):
+        fb = FakeBackend(80)
+        calls.append(fb)
+        orig(self, settings, fb)
+
+    monkeypatch.setattr(clf_mod.BrainRotClassifier, "__init__", init)
+    server._cache.clear()
+    c = TestClient(server.app)
+    body = {"video_id": "C9xyz", "platform": "instagram", "frames_b64": [_jpeg_b64()] * 8}
+    r = c.post("/predict", json=body)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["prob"] == 0.8 and d["flagged"] is True and d["label"] == "brain_rot"
+    assert d["reasons"] == ["rapid cuts"]
+    parts, prompt = calls[0].calls[0]
+    assert [p[1] for p in parts if p[0] == "bytes"].count("image/jpeg") == 8
+    assert "8 screenshots" in prompt and "captured live" in prompt
+
+    assert c.post("/predict", json=body).json() == d
+    assert len(calls) == 1  # second call came from the cache
+
+
+def test_predict_rejects_bad_input(monkeypatch):
+    _patch(monkeypatch)
+    server._cache.clear()
+    c = TestClient(server.app)
+    assert c.post("/predict", json={"video_id": "a", "frames_b64": []}).status_code == 400
+    assert c.post("/predict", json={"video_id": "b", "frames_b64": ["not base64!!"]}).status_code == 400
+
+
+def test_health():
+    d = TestClient(server.app).get("/health").json()
+    assert d["ok"] is True and "model" in d

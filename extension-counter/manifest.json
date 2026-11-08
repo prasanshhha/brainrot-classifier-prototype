@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "BrainRot Counter",
+  "version": "0.2.0",
+  "description": "Counts brain rot reels while you scroll Instagram and TikTok.",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.instagram.com/*",
+        "https://www.tiktok.com/*"
+      ],
+      "js": [
+        "config.js",
+        "content.js"
+      ],
+      "css": [
+        "overlay.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "BrainRot Counter"
+  }
+}

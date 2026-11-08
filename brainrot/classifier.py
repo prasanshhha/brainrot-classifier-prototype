@@ -33,9 +33,13 @@ class Backend(Protocol):
     def classify(self, parts: list[Any], prompt: str) -> GeminiVerdict: ...
 
 
-def _format_signals(s: LocalSignals | None) -> str:
+NO_SIGNALS_URL = "  (not available - video was analysed by URL without downloading)"
+NO_SIGNALS_LIVE = "  (not available - frames were captured live in the browser, so cut rate and audio were not measured)"
+
+
+def _format_signals(s: LocalSignals | None, missing: str = NO_SIGNALS_URL) -> str:
     if s is None:
-        return "  (not available - video was analysed by URL without downloading)"
+        return missing
     vol = f"{s.mean_volume_db:.1f} dB" if s.mean_volume_db is not None else "n/a"
     return (
         f"  - duration: {s.duration_s:.1f}s, resolution {s.width}x{s.height} "
@@ -77,9 +81,28 @@ class BrainRotClassifier:
         return self._classify_file(path, context, source_label=str(path))
 
     # ---------- internals ----------
-    def _build_prompt(self, signals: LocalSignals | None, context: str, extra: str = "") -> str:
+    def classify_frames(self, frames: list[bytes], source: str = "", context: str = "",
+                        interval_s: float = 0.5) -> ClassificationResult:
+        """Classify JPEG screenshots taken by the browser extension (no audio, no local signals)."""
+        if not frames:
+            raise ValueError("no frames to classify")
+        t0 = time.time()
+        parts: list[Any] = []
+        for i, jpeg in enumerate(frames):
+            parts.append(self.backend.text_part(f"Frame {i + 1} at 00:{i * interval_s:04.1f}"))
+            parts.append(self.backend.bytes_part(jpeg, "image/jpeg"))
+        note = (f"\nNote: you are seeing {len(frames)} screenshots taken {interval_s:g}s apart from the first "
+                f"seconds of a short video playing in a browser, with no audio. Judge from the visuals, "
+                f"on-screen text and pace you can see, and lower your confidence to match.\n")
+        prompt = self._build_prompt(None, context, extra=note, missing=NO_SIGNALS_LIVE)
+        result = self._finish(self.backend.classify(parts, prompt), source, None, t0)
+        result.mode = "browser_frames"
+        return result
+
+    def _build_prompt(self, signals: LocalSignals | None, context: str, extra: str = "",
+                      missing: str = NO_SIGNALS_URL) -> str:
         user_ctx = f"\n## Extra context supplied by the user\n{context.strip()}\n" if context.strip() else ""
-        prompt = self.prompt_template.replace("{SIGNALS}", _format_signals(signals))
+        prompt = self.prompt_template.replace("{SIGNALS}", _format_signals(signals, missing))
         return prompt.replace("{USER_CONTEXT}", user_ctx + extra)
 
     def _finish(self, verdict: GeminiVerdict, source: str, signals: LocalSignals | None, t0: float) -> ClassificationResult:
